@@ -1,0 +1,11 @@
+version = 0.1
+[default]
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "hnap-json-harvester"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-hrsehtaeh7ed"
+s3_prefix = "hnap-json-harvester"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+image_repositories = ["HnapJsonHarvestFunction=273335311311.dkr.ecr.us-east-1.amazonaws.com/hnap_json"]
