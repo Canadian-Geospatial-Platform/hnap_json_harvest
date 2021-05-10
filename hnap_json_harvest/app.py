@@ -6,6 +6,7 @@ import smart_open
 import datetime
 import urllib.request
 import xml.dom.minidom
+import logging
 from botocore.exceptions import ClientError
 from xml.dom import minidom
 
@@ -17,15 +18,16 @@ def lambda_handler(event, context):
     
     #base_url = "https://maps.canada.ca/geonetwork"
     #gn_q_query = "/srv/eng/q"
-    #gn_csw_url = "/srv/csw"
     #gn_change_api_url = "/srv/api/0.1/records/status/change"
     #gn_json_record_url = "/srv/api/0.1/records"
     
+    
     base_url = "https://hnap-harv-bucket.s3.amazonaws.com"
-    gn_q_query = "/q_xml.xml"
-    #gn_csw_url = "/srv/csw"
+    gn_q_query = "/q_xml_small.xml"
     gn_change_api_url = "/change.json"
     #gn_json_record_url = "/srv/api/0.1/records"
+    test_json_record_url = "https://open.canada.ca/data/api/action/package_show?id="
+    bucket = "hnap-test-bucket"
     
     """ 
     Used for `sam local invoke -e payload.json` for local testing
@@ -61,7 +63,11 @@ def lambda_handler(event, context):
     elif runtype == "full":
         message = "Reloading all JSON records..."
         uuid_list = get_full_uuids_list(base_url + gn_q_query)
-        err_msg = harvest_uuids(uuid_list)
+        err_msg = harvest_uuids(uuid_list, test_json_record_url, bucket)
+        if not err_msg:
+            message += "..." + str(len(uuid_list)) + "records harvest successfully into " + bucket
+        else:
+            message += "... some error occured. View logs"
     elif fromDateTime:
         message = "Reloading all JSON records from: " + fromDateTime + "..."
     else:
@@ -85,7 +91,12 @@ def lambda_handler(event, context):
     return response
 
 def datetime_valid(dt_str):
-    #https://stackoverflow.com/a/61569783
+    """
+    Check to see if user supplied a valid datetime 
+    in ISO:8601 UTC time with +00:00 or 'Z' 
+    https://stackoverflow.com/a/61569783
+    
+    """
     try:
         datetime.fromisoformat(dt_str)
     except:
@@ -97,7 +108,11 @@ def datetime_valid(dt_str):
     return True
     
 def get_full_uuids_list(gn_q_query):
-    """ Get a full list of all uuids """
+    """ Get a full list of all uuids
+    :param gn_q_query: URL of the GeoNetwork 'q' search
+    See https://geonetwork-opensource.org/manuals/3.10.x/en/api/q-search.html
+    :return: a full list of uuids to harvest
+    """
     
     uuid_list = []
     
@@ -114,16 +129,17 @@ def get_full_uuids_list(gn_q_query):
         
         return uuid_list
     except:
-        #print("Could not load the GeoNetwork 3.6 'q' query. Cannot complete a full load of the dataset")
-        #print("Could not access: ", gn_q_query)
-        #return uuid_count
-    
+        print("Could not load the GeoNetwork 3.6 'q' search.")
+        print("Cannot complete a full load of the dataset")
+        print("Could not access: ", gn_q_query)
+        return uuid_list
+
 def get_changes(gn_change_api_url, fromDateTime):
     """ Returns a list of UUIDs to download """
     
-def load_changes_records(, uuid_list, s3_bucket_name, s3_bucket_key):
-
-
+    #TODO
+    return True
+    
 def create_bucket(bucket_name, region=None):
     """Create an S3 bucket in a specified region
 
@@ -172,8 +188,55 @@ def upload_file(file_name, bucket, object_name=None):
         return False
     return True
 
-def harvest_uuids(uuid_list, gn_json_record_url, s3_bucket_name, s3_bucket_key):
-    """ Harvests GeoNetwork JSON file into s3_bucket_name """
-    """ Ensure s3_bucket_key is saved as aws environment variable """
-    
+def upload_json_file(file_name, bucket, json_data, object_name=None):
+    """Upload a json file to an S3 bucket
+
+    :param file_name: File to upload
+    :param bucket: Bucket to upload to
+    :param json_data: stream of json data to write
+    :param object_name: S3 object name. If not specified then file_name is used
+    :return: True if file was uploaded, else False
+    """
+
+    # If S3 object_name was not specified, use file_name
+    if object_name is None:
+        object_name = file_name
+
+    # Upload the file
+    s3 = boto3.resource('s3')
+    try:
+        s3object = s3.Object(bucket, file_name)
+        response = s3object.put(Body=(bytes(json.dumps(json_data.decode('utf-8')).encode('UTF-8'))))
+    except ClientError as e:
+        logging.error(e)
+        return False
     return True
+
+def harvest_uuids(uuid_list, gn_json_record_url, bucket):
+    """ Harvests GeoNetwork JSON file into s3_bucket_name
+    
+    :param uuid_list: list of uuids to upload
+    :param gn_json_record_url: base path to the geonetwork record api
+    :param bucket: bucket to upload to
+    :return: accumulated error messages
+    """
+    
+    error_msg = None
+    
+    if create_bucket(bucket):
+        count = 0
+        for uuid in uuid_list:
+            try:
+                uuid_filename = uuid + ".json"
+                #print(gn_json_record_url + uuid)
+                str_data = urllib.request.urlopen(gn_json_record_url + uuid).read()
+                if upload_json_file(uuid_filename, bucket, str_data):
+                    count += 1
+            except ClientError as e:
+                logging.error(e)
+                error_msg += e
+        print("Uploaded", count, " records")
+    else:
+        error_msg = "Could not create S3 bucket: " + bucket
+
+    return error_msg
