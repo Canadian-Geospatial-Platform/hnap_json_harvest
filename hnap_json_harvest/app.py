@@ -24,6 +24,7 @@ def lambda_handler(event, context):
     #gn_json_record_url = "/srv/api/0.1/records"
     #bucket_location = "ca-central-1"
     #bucket = "hnap-test-bucket"
+    #run_interval_minutes = 11
     
     """DEV SETTINGS"""
     base_url = "https://hnap-harv-bucket.s3.amazonaws.com"
@@ -32,6 +33,7 @@ def lambda_handler(event, context):
     gn_json_record_url = "https://open.canada.ca/data/api/action/package_show?id="
     bucket_location = None
     bucket = "hnap-test-bucket1"
+    run_interval_minutes = 11
     
     """ 
     Used for `sam local invoke -e payload.json` for local testing
@@ -68,13 +70,12 @@ def lambda_handler(event, context):
         message = "Reloading all JSON records..."
         uuid_list = get_full_uuids_list(base_url + gn_q_query)
         err_msg = harvest_uuids(uuid_list, gn_json_record_url, bucket, bucket_location)
-
     elif fromDateTime:
         message = "Reloading JSON records from: " + fromDateTime + "..."
         uuid_list = get_fromDateTime_uuids_list(base_url + gn_change_api_url, fromDateTime)
         err_msg = harvest_uuids(uuid_list, gn_json_record_url, bucket, bucket_location)
     else:
-        fromDateTime = datetime.datetime.utcnow().now() - datetime.timedelta(minutes=11)
+        fromDateTime = datetime.datetime.utcnow().now() - datetime.timedelta(minutes=run_interval_minutes)
         fromDateTime = fromDateTime.isoformat()[:-7] + 'Z'
         message = "Default setting. Harvesting JSON records from: " + fromDateTime + "..."
         uuid_list = get_fromDateTime_uuids_list(base_url + gn_change_api_url, fromDateTime)
@@ -119,7 +120,7 @@ def datetime_valid(dt_str):
     
 def convert_to_datetime(dt_str):
     """
-    Check to see if user supplied a valid datetime 
+    Check to see if user supplied a valid datetime and returns it as a datetime object
     in ISO:8601 UTC time with +00:00 or 'Z' 
     https://stackoverflow.com/a/61569783
     
@@ -181,7 +182,9 @@ def get_fromDateTime_uuids_list(gn_change_query, fromDateTime):
         
         for metadata in str_data['records']:
             lastdatetime = metadata['lastModifiedTime']
-            if convert_to_datetime(lastdatetime) >= convert_to_datetime(fromDateTime):
+            modification = metadata['status']
+            if convert_to_datetime(lastdatetime) >= convert_to_datetime(fromDateTime) and modification != 'deleted':
+                print(metadata['uuid'])
                 uuid = metadata['uuid']
                 uuid_list.append(uuid)
             
