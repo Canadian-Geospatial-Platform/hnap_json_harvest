@@ -17,18 +17,19 @@ def lambda_handler(event, context):
     """
     print(event)
     
+    """PROD SETTINGS"""
     #base_url = "https://maps.canada.ca/geonetwork"
     #gn_q_query = "/srv/eng/q"
     #gn_change_api_url = "/srv/api/0.1/records/status/change"
     #gn_json_record_url = "/srv/api/0.1/records"
+    #bucket_location = "ca-central-1"
+    #bucket = "hnap-test-bucket"
     
-    
+    """DEV SETTINGS"""
     base_url = "https://hnap-harv-bucket.s3.amazonaws.com"
     gn_q_query = "/q_xml_small.xml"
     gn_change_api_url = "/change.json"
-    #gn_json_record_url = "/srv/api/0.1/records"
-    test_json_record_url = "https://open.canada.ca/data/api/action/package_show?id="
-    #bucket_location = "ca-central-1"
+    gn_json_record_url = "https://open.canada.ca/data/api/action/package_show?id="
     bucket_location = None
     bucket = "hnap-test-bucket1"
     
@@ -66,19 +67,21 @@ def lambda_handler(event, context):
     elif runtype == "full":
         message = "Reloading all JSON records..."
         uuid_list = get_full_uuids_list(base_url + gn_q_query)
-        err_msg = harvest_uuids(uuid_list, test_json_record_url, bucket, bucket_location)
+        err_msg = harvest_uuids(uuid_list, gn_json_record_url, bucket, bucket_location)
 
     elif fromDateTime:
-        message = "Reloading all JSON records from: " + fromDateTime + "..."
+        message = "Reloading JSON records from: " + fromDateTime + "..."
         uuid_list = get_fromDateTime_uuids_list(base_url + gn_change_api_url, fromDateTime)
-        err_msg = harvest_uuids(uuid_list, test_json_record_url, bucket, bucket_location)
+        err_msg = harvest_uuids(uuid_list, gn_json_record_url, bucket, bucket_location)
     else:
         fromDateTime = datetime.datetime.utcnow().now() - datetime.timedelta(minutes=11)
         fromDateTime = fromDateTime.isoformat()[:-7] + 'Z'
         message = "Default setting. Harvesting JSON records from: " + fromDateTime + "..."
+        uuid_list = get_fromDateTime_uuids_list(base_url + gn_change_api_url, fromDateTime)
+        err_msg = harvest_uuids(uuid_list, gn_json_record_url, bucket, bucket_location)
         
     if not err_msg:
-        message += "..." + str(len(uuid_list)) + " records harvest successfully into " + bucket
+        message += "..." + str(len(uuid_list)) + " record(s) harvested into " + bucket
     else:
         message += "... some error occured. View logs"
             
@@ -182,7 +185,7 @@ def get_fromDateTime_uuids_list(gn_change_query, fromDateTime):
                 uuid = metadata['uuid']
                 uuid_list.append(uuid)
             
-        print("Using the fromDateTime provided, there are: %i metadata records to harvest" % len(uuid_list))
+        print("Using the fromDateTime provided: %s, there are: %i metadata records to harvest" % (fromDateTime, len(uuid_list)))
             
         return uuid_list
     except:
@@ -190,13 +193,6 @@ def get_fromDateTime_uuids_list(gn_change_query, fromDateTime):
         print("Cannot complete a load of the dataset")
         print("Could not access or properly parse: ", gn_change_query)
         return uuid_list
-    
-
-def get_changes(gn_change_api_url, fromDateTime):
-    """ Returns a list of UUIDs to download """
-    
-    #TODO
-    return True
     
 def create_bucket(bucket_name, region=None):
     """Create an S3 bucket in a specified region
