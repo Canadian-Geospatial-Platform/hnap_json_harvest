@@ -3,10 +3,11 @@ import json
 import requests
 import boto3
 import smart_open
-import datetime
 import urllib.request
 import xml.dom.minidom
 import logging
+import datetime
+
 from botocore.exceptions import ClientError
 from xml.dom import minidom
 
@@ -27,7 +28,9 @@ def lambda_handler(event, context):
     gn_change_api_url = "/change.json"
     #gn_json_record_url = "/srv/api/0.1/records"
     test_json_record_url = "https://open.canada.ca/data/api/action/package_show?id="
-    bucket = "hnap-test-bucket"
+    #bucket_location = "ca-central-1"
+    bucket_location = None
+    bucket = "hnap-test-bucket1"
     
     """ 
     Used for `sam local invoke -e payload.json` for local testing
@@ -44,7 +47,7 @@ def lambda_handler(event, context):
     try:
         runtype = event["queryStringParameters"]["runtype"]
     except:
-        runtype = ""
+        runtype = False
         
     try:
         if datetime_valid(event["queryStringParameters"]["fromDateTime"]):
@@ -63,18 +66,21 @@ def lambda_handler(event, context):
     elif runtype == "full":
         message = "Reloading all JSON records..."
         uuid_list = get_full_uuids_list(base_url + gn_q_query)
-        err_msg = harvest_uuids(uuid_list, test_json_record_url, bucket)
-        if not err_msg:
-            message += "..." + str(len(uuid_list)) + "records harvest successfully into " + bucket
-        else:
-            message += "... some error occured. View logs"
+        err_msg = harvest_uuids(uuid_list, test_json_record_url, bucket, bucket_location)
+
     elif fromDateTime:
         message = "Reloading all JSON records from: " + fromDateTime + "..."
+        uuid_list = get_fromDateTime_uuids_list(base_url + gn_change_api_url, fromDateTime)
+        err_msg = harvest_uuids(uuid_list, test_json_record_url, bucket, bucket_location)
     else:
         fromDateTime = datetime.datetime.utcnow().now() - datetime.timedelta(minutes=11)
         fromDateTime = fromDateTime.isoformat()[:-7] + 'Z'
         message = "Default setting. Harvesting JSON records from: " + fromDateTime + "..."
-            
+        
+    if not err_msg:
+        message += "..." + str(len(uuid_list)) + " records harvest successfully into " + bucket
+    else:
+        message += "... some error occured. View logs"
             
     response = {
         "statusCode": "200",
@@ -98,14 +104,34 @@ def datetime_valid(dt_str):
     
     """
     try:
-        datetime.fromisoformat(dt_str)
+        datetime.datetime.fromisoformat(dt_str)
     except:
         try:
-            datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+            datetime.datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
         except:
+            print("fromDateTime is not a valid ISO:8601 UTC datetime with +00:00 or 'Z' ")
             return False
         return True
     return True
+    
+def convert_to_datetime(dt_str):
+    """
+    Check to see if user supplied a valid datetime 
+    in ISO:8601 UTC time with +00:00 or 'Z' 
+    https://stackoverflow.com/a/61569783
+    
+    """
+    
+    try:
+        dt_str = datetime.datetime.fromisoformat(dt_str)
+    except:
+        try:
+            dt_str = datetime.datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+        except:
+            print("fromDateTime is not a valid ISO:8601 UTC datetime with +00:00 or 'Z' ")
+            return False
+        return dt_str
+    return dt_str
     
 def get_full_uuids_list(gn_q_query):
     """ Get a full list of all uuids
@@ -133,6 +159,38 @@ def get_full_uuids_list(gn_q_query):
         print("Cannot complete a full load of the dataset")
         print("Could not access: ", gn_q_query)
         return uuid_list
+        
+def get_fromDateTime_uuids_list(gn_change_query, fromDateTime):
+    """ Get a list of insert/deleted/modified uuids from fromDateTime
+    :param gn_change_query: URL of the GeoNetwork change api
+    :param fromDateTime: datetime of when to harvest
+    :return: a list of uuids to harvest
+    """
+    
+    uuid_list = []
+    
+    try:
+        #Use the build in fromDateTime functionality in the GN change API
+        #TO TEST gn_change_query = gn_change_query + "?fromDateTime=" + fromDateTime
+        
+        str_data = json.loads(urllib.request.urlopen(gn_change_query).read())
+        #print (str_data['records'])
+        
+        for metadata in str_data['records']:
+            lastdatetime = metadata['lastModifiedTime']
+            if convert_to_datetime(lastdatetime) >= convert_to_datetime(fromDateTime):
+                uuid = metadata['uuid']
+                uuid_list.append(uuid)
+            
+        print("Using the fromDateTime provided, there are: %i metadata records to harvest" % len(uuid_list))
+            
+        return uuid_list
+    except:
+        print("Could not load the GeoNetwork 3.6 change api.")
+        print("Cannot complete a load of the dataset")
+        print("Could not access or properly parse: ", gn_change_query)
+        return uuid_list
+    
 
 def get_changes(gn_change_api_url, fromDateTime):
     """ Returns a list of UUIDs to download """
@@ -212,7 +270,7 @@ def upload_json_file(file_name, bucket, json_data, object_name=None):
         return False
     return True
 
-def harvest_uuids(uuid_list, gn_json_record_url, bucket):
+def harvest_uuids(uuid_list, gn_json_record_url, bucket, bucket_location):
     """ Harvests GeoNetwork JSON file into s3_bucket_name
     
     :param uuid_list: list of uuids to upload
@@ -223,7 +281,7 @@ def harvest_uuids(uuid_list, gn_json_record_url, bucket):
     
     error_msg = None
     
-    if create_bucket(bucket):
+    if create_bucket(bucket, bucket_location):
         count = 0
         for uuid in uuid_list:
             try:
