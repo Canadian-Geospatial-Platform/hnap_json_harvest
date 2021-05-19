@@ -76,3 +76,6 @@ Confirm: y
 [Enter]
 [Enter]
 
+### Deleting the microservice
+
+aws cloudformation delete-stack --stack-name <<stack-name>>
