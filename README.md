@@ -92,6 +92,7 @@ Confirm: y
 
 After this, sam will build the CloufFormation stack and deploy the ECR.
 
+```
 CloudFormation stack changeset
 -------------------------------------------------------------------------------------------------------------------------
 Operation                      LogicalResourceId              ResourceType                   Replacement                  
@@ -105,11 +106,13 @@ Operation                      LogicalResourceId              ResourceType      
 + Add                          ServerlessRestApiProdStage     AWS::ApiGateway::Stage         N/A                          
 + Add                          ServerlessRestApi              AWS::ApiGateway::RestApi       N/A                          
 -------------------------------------------------------------------------------------------------------------------------
+```
 
 A final question will ask if you want to deploy the changeset.
 
 Confirm: y
 
+```
 CloudFormation events from changeset
 -------------------------------------------------------------------------------------------------------------------------
 ResourceStatus                 ResourceType                   LogicalResourceId              ResourceStatusReason         
@@ -157,6 +160,7 @@ Key                 HnapJsonHarvestFunction
 Description         HNAP JSON Harvesting Lambda Function ARN                                                              
 Value               **LAMBDA_ARN**                                                                                 
 ---------------------------------------------------------------------------------------------------------------------------
+```
 
 ### Deleting the microservice
 
