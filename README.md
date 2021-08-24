@@ -78,7 +78,9 @@ sam deploy --guided
 ```
 
 Stack Name: hnap_json_harvest_yyyymmdd
+
 AWS Region: ca-central-1
+
 Image Repository: Image ECR URI from Step 4
 
 Confirm: y
@@ -87,6 +89,74 @@ Confirm: y
 Confirm: y
 [Enter]
 [Enter]
+
+After this, sam will build the CloufFormation stack and deploy the ECR.
+
+CloudFormation stack changeset
+-------------------------------------------------------------------------------------------------------------------------
+Operation                      LogicalResourceId              ResourceType                   Replacement                  
+-------------------------------------------------------------------------------------------------------------------------
++ Add                          HnapJsonHarvestFunctionHnapJ   AWS::Lambda::Permission        N/A                          
+                               sonHarvestPermissionProd                                                                   
++ Add                          HnapJsonHarvestFunctionRole    AWS::IAM::Role                 N/A                          
++ Add                          HnapJsonHarvestFunction        AWS::Lambda::Function          N/A                          
++ Add                          ServerlessRestApiDeployment7   AWS::ApiGateway::Deployment    N/A                          
+                               22867cbc3                                                                                  
++ Add                          ServerlessRestApiProdStage     AWS::ApiGateway::Stage         N/A                          
++ Add                          ServerlessRestApi              AWS::ApiGateway::RestApi       N/A                          
+-------------------------------------------------------------------------------------------------------------------------
+
+A final question will ask if you want to deploy the changeset.
+
+Confirm: y
+
+CloudFormation events from changeset
+-------------------------------------------------------------------------------------------------------------------------
+ResourceStatus                 ResourceType                   LogicalResourceId              ResourceStatusReason         
+-------------------------------------------------------------------------------------------------------------------------
+CREATE_IN_PROGRESS             AWS::IAM::Role                 HnapJsonHarvestFunctionRole    -                            
+CREATE_IN_PROGRESS             AWS::IAM::Role                 HnapJsonHarvestFunctionRole    Resource creation Initiated  
+CREATE_COMPLETE                AWS::IAM::Role                 HnapJsonHarvestFunctionRole    -                            
+CREATE_IN_PROGRESS             AWS::Lambda::Function          HnapJsonHarvestFunction        -                            
+CREATE_IN_PROGRESS             AWS::Lambda::Function          HnapJsonHarvestFunction        Resource creation Initiated  
+CREATE_COMPLETE                AWS::Lambda::Function          HnapJsonHarvestFunction        -                            
+CREATE_IN_PROGRESS             AWS::ApiGateway::RestApi       ServerlessRestApi              -                            
+CREATE_IN_PROGRESS             AWS::ApiGateway::RestApi       ServerlessRestApi              Resource creation Initiated  
+CREATE_COMPLETE                AWS::ApiGateway::RestApi       ServerlessRestApi              -                            
+CREATE_IN_PROGRESS             AWS::Lambda::Permission        HnapJsonHarvestFunctionHnapJ   Resource creation Initiated  
+                                                              sonHarvestPermissionProd                                    
+CREATE_IN_PROGRESS             AWS::ApiGateway::Deployment    ServerlessRestApiDeployment7   -                            
+                                                              22867cbc3                                                   
+CREATE_IN_PROGRESS             AWS::Lambda::Permission        HnapJsonHarvestFunctionHnapJ   -                            
+                                                              sonHarvestPermissionProd                                    
+CREATE_IN_PROGRESS             AWS::ApiGateway::Deployment    ServerlessRestApiDeployment7   Resource creation Initiated  
+                                                              22867cbc3                                                   
+CREATE_COMPLETE                AWS::ApiGateway::Deployment    ServerlessRestApiDeployment7   -                            
+                                                              22867cbc3                                                   
+CREATE_IN_PROGRESS             AWS::ApiGateway::Stage         ServerlessRestApiProdStage     -                            
+CREATE_IN_PROGRESS             AWS::ApiGateway::Stage         ServerlessRestApiProdStage     Resource creation Initiated  
+CREATE_COMPLETE                AWS::ApiGateway::Stage         ServerlessRestApiProdStage     -                            
+CREATE_COMPLETE                AWS::Lambda::Permission        HnapJsonHarvestFunctionHnapJ   -                            
+                                                              sonHarvestPermissionProd                                    
+CREATE_COMPLETE                AWS::CloudFormation::Stack     APP_NAME            -                            
+-------------------------------------------------------------------------------------------------------------------------
+
+CloudFormation outputs from deployed stack
+---------------------------------------------------------------------------------------------------------------------------
+Outputs                                                                                                                   
+---------------------------------------------------------------------------------------------------------------------------
+Key                 HnapJsonHarvestApi                                                                                    
+Description         API Gateway endpoint URL for Prod stage for HNAP JSON Harvesting function                             
+Value               **API PATH**               
+
+Key                 HnapJsonHarvestFunctionIamRole                                                                        
+Description         Implicit IAM Role created for HNAP JSON Harvesting function                                           
+Value               **API_ARN**           
+
+Key                 HnapJsonHarvestFunction                                                                               
+Description         HNAP JSON Harvesting Lambda Function ARN                                                              
+Value               **LAMBDA_ARN**                                                                                 
+---------------------------------------------------------------------------------------------------------------------------
 
 ### Deleting the microservice
 
