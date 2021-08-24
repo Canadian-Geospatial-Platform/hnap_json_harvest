@@ -69,7 +69,7 @@ REPORT RequestId: -ID-  Init Duration: 1.02 ms  Duration: 2137.28 ms    Billed D
 
 ### Step 4 - Create an Amazon Elastic Container Registry
 
-`todo`
+Go to the Amazon ECR service and press "Create repository" and create a new Private ECR. The URI similar to "XYZ.dkr.ecr.us-east-1.amazonaws.com/your_ECR_name" will be used in step 5 of deployment.
 
 ### Step 5 - Deploy to AWS
 
@@ -78,7 +78,7 @@ sam deploy --guided
 ```
 
 Stack Name: hnap_json_harvest_yyyymmdd
-AWS Region: `todo`
+AWS Region: ca-central-1
 Image Repository: Image ECR URI from Step 4
 
 Confirm: y
