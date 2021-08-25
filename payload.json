@@ -1,7 +1,8 @@
 {
     "queryStringParameters":
     {
-        "runtype": "full",
-        "_fromDateTime": "2008-08-30T01:45:36.123Z"
+        "_runtype": "full",
+        "verbose": "true",
+        "fromDateTime": "2021-08-23T20:08:09Z"
     }
 }

@@ -7,6 +7,7 @@ import urllib.request
 import xml.dom.minidom
 import logging
 import datetime
+import boto3.exceptions
 
 from botocore.exceptions import ClientError
 from xml.dom import minidom
@@ -18,21 +19,23 @@ def lambda_handler(event, context):
     print(event)
     
     """PROD SETTINGS"""
-    #base_url = "https://maps.canada.ca/geonetwork"
-    #gn_q_query = "/srv/eng/q"
-    #gn_change_api_url = "/srv/api/0.1/records/status/change"
-    #gn_json_record_url = "/srv/api/0.1/records"
+    #base_url = "https://maps.canada.ca"
+    #gn_q_query = "/srv/eng/q" #not used
+    #gn_change_api_url = "/geonetwork/srv/api/0.1/records/status/change"
+    #gn_json_record_url_start = "https://maps.canada.ca/geonetwork/srv/api/0.1/records/"
+    #gn_json_record_url_end = "/formatters/json?addSchemaLocation=true&attachment=false&withInfo=false" #other flags: increasePopularity
     #bucket_location = "ca-central-1"
     #bucket = "hnap-test-bucket"
     #run_interval_minutes = 11
     
-    """DEV SETTINGS"""
-    base_url = "https://hnap-harv-bucket.s3.amazonaws.com"
-    gn_q_query = "/q_xml_small.xml"
-    gn_change_api_url = "/change.json"
-    gn_json_record_url = "https://open.canada.ca/data/api/action/package_show?id="
+    """STAGING SETTINGS"""
+    base_url = "https://maps-staging.canada.ca"
+    gn_q_query = "/q_xml_small.xml" #not used
+    gn_change_api_url = "/geonetwork/srv/api/0.1/records/status/change"
+    gn_json_record_url_start = "https://maps-staging.canada.ca/geonetwork/srv/api/0.1/records/"
+    gn_json_record_url_end = "/formatters/json?addSchemaLocation=true&attachment=false&withInfo=false" #other flags: increasePopularity
     bucket_location = None
-    bucket = "hnap-test-bucket1"
+    bucket = "hnap-test-bucket2"
     run_interval_minutes = 11
     
     """ 
@@ -40,12 +43,17 @@ def lambda_handler(event, context):
     For actual use, comment out the two lines below 
     """
     
-    if "body" in event:
-        event = json.loads(event["body"])
+    #if "body" in event:
+    #    event = json.loads(event["body"])
         
     """ 
     Parse query string parameters 
     """
+    
+    try:
+        verbose = event["queryStringParameters"]["verbose"]
+    except:
+        verbose = False
         
     try:
         runtype = event["queryStringParameters"]["runtype"]
@@ -69,33 +77,42 @@ def lambda_handler(event, context):
     elif runtype == "full":
         message = "Reloading all JSON records..."
         uuid_list = get_full_uuids_list(base_url + gn_q_query)
-        err_msg = harvest_uuids(uuid_list, gn_json_record_url, bucket, bucket_location)
+        err_msg = harvest_uuids(uuid_list, gn_json_record_url_start, gn_json_record_url_end, bucket, bucket_location)
     elif fromDateTime:
         message = "Reloading JSON records from: " + fromDateTime + "..."
         uuid_list = get_fromDateTime_uuids_list(base_url + gn_change_api_url, fromDateTime)
-        err_msg = harvest_uuids(uuid_list, gn_json_record_url, bucket, bucket_location)
+        err_msg = harvest_uuids(uuid_list, gn_json_record_url_start, gn_json_record_url_end, bucket, bucket_location)
     else:
         fromDateTime = datetime.datetime.utcnow().now() - datetime.timedelta(minutes=run_interval_minutes)
         fromDateTime = fromDateTime.isoformat()[:-7] + 'Z'
         message = "Default setting. Harvesting JSON records from: " + fromDateTime + "..."
         uuid_list = get_fromDateTime_uuids_list(base_url + gn_change_api_url, fromDateTime)
-        err_msg = harvest_uuids(uuid_list, gn_json_record_url, bucket, bucket_location)
+        err_msg = harvest_uuids(uuid_list, gn_json_record_url_start, gn_json_record_url_end, bucket, bucket_location)
         
     if not err_msg:
         message += "..." + str(len(uuid_list)) + " record(s) harvested into " + bucket
+        if verbose == "true" and len(uuid_list) >0:
+            message += '"uuid": ['
+            for i in range(len(uuid_list)):
+                #JSON format does not allow trailing commas for the last item of an array
+                #See: https://www.json.org/json-en.html
+                #Append comma if not the first element 
+                if i:
+                    message += ","
+                message += "{" + uuid_list[i] + "}"
+            message += "]"
     else:
-        message += "... some error occured. View logs"
+        message += "... some error occured:" + err_msg
             
     response = {
         "statusCode": "200",
         "headers": {"Content-type": "application/json"},
         "body": json.dumps(
             {
-                "statusCode": "200",
+                "fromDateTime": fromDateTime,
+                "harvestCount": str(len(uuid_list)),
                 "message": message,
-                
-            },
-            indent = 4
+            }
         ),
     }
     return response
@@ -175,16 +192,32 @@ def get_fromDateTime_uuids_list(gn_change_query, fromDateTime):
     
     try:
         #Use the build in fromDateTime functionality in the GN change API
-        #TO TEST gn_change_query = gn_change_query + "?fromDateTime=" + fromDateTime
-        
-        str_data = json.loads(urllib.request.urlopen(gn_change_query).read())
+        gn_change_filter = urllib.parse.quote("dateFrom=" + fromDateTime)
+        gn_change_query = gn_change_query + "?" + gn_change_filter
+        print (gn_change_query)
+
+        ###urllib
+        #req = urllib.request.Request(gn_change_query)
+        #req.add_header('User-Agent', 'Mozilla/5.0')
+        #req.add_header('Content-Type', 'application/json; charset=utf-8')
+        #raw_data = urllib.request.urlopen(req).read()
+    
+        #str_data = json.loads(raw_data)
         #print (str_data['records'])
-        
+    
+        ###requests
+        headers = { 
+                "Content-Type": "application/json; charset=utf-8",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            }
+        response = requests.get(gn_change_query, headers=headers)
+        str_data = json.loads(response.text)
+
         for metadata in str_data['records']:
             lastdatetime = metadata['lastModifiedTime']
             modification = metadata['status']
             if convert_to_datetime(lastdatetime) >= convert_to_datetime(fromDateTime) and modification != 'deleted':
-                print(metadata['uuid'])
+                #print(metadata['uuid'])
                 uuid = metadata['uuid']
                 uuid_list.append(uuid)
             
@@ -195,7 +228,8 @@ def get_fromDateTime_uuids_list(gn_change_query, fromDateTime):
         print("Could not load the GeoNetwork 3.6 change api.")
         print("Cannot complete a load of the dataset")
         print("Could not access or properly parse: ", gn_change_query)
-        return uuid_list
+        error_msg = "Could not access or properly parse: " + gn_change_query
+        return error_msg
     
 def create_bucket(bucket_name, region=None):
     """Create an S3 bucket in a specified region
@@ -207,8 +241,16 @@ def create_bucket(bucket_name, region=None):
     :param region: String region to create bucket in, e.g., 'us-west-2'
     :return: True if bucket created, else False
     """
-
-    # Create bucket
+    
+    
+    #client = boto3.client('s3', region_name=region)
+    #response = client.head_bucket(Bucket=bucket_name)
+    #if response['ResponseMetadata']['HTTPStatusCode'] == 200:
+    #    """ Bucket already exists and we have sufficent permissions """
+    #    print("Bucket already exists and we have sufficent permissions")
+    #    return True
+    #else:
+    """" Create bucket """
     try:
         if region is None:
             s3_client = boto3.client('s3')
@@ -218,10 +260,11 @@ def create_bucket(bucket_name, region=None):
             location = {'LocationConstraint': region}
             s3_client.create_bucket(Bucket=bucket_name,
                                     CreateBucketConfiguration=location)
+
     except ClientError as e:
         logging.error(e)
         return False
-    return True
+    return True #Success
 
 def upload_file(file_name, bucket, object_name=None):
     """Upload a file to an S3 bucket
@@ -269,11 +312,12 @@ def upload_json_file(file_name, bucket, json_data, object_name=None):
         return False
     return True
 
-def harvest_uuids(uuid_list, gn_json_record_url, bucket, bucket_location):
+def harvest_uuids(uuid_list, gn_json_record_url_start, gn_json_record_url_end, bucket, bucket_location):
     """ Harvests GeoNetwork JSON file into s3_bucket_name
     
     :param uuid_list: list of uuids to upload
-    :param gn_json_record_url: base path to the geonetwork record api
+    :param gn_json_record_url: starting base path to the geonetwork record api
+    :param gn_json_record_url: ending base path to the geonetwork record api
     :param bucket: bucket to upload to
     :return: accumulated error messages
     """
@@ -284,9 +328,12 @@ def harvest_uuids(uuid_list, gn_json_record_url, bucket, bucket_location):
         count = 0
         for uuid in uuid_list:
             try:
+                req = urllib.request.Request(gn_json_record_url_start + uuid + gn_json_record_url_end)
+                req.add_header('Content-Type', 'application/json; charset=utf-8')
+                str_data = urllib.request.urlopen(req).read()
+                
                 uuid_filename = uuid + ".json"
-                #print(gn_json_record_url + uuid)
-                str_data = urllib.request.urlopen(gn_json_record_url + uuid).read()
+                print(gn_json_record_url_start + uuid + gn_json_record_url_end)
                 if upload_json_file(uuid_filename, bucket, str_data):
                     count += 1
             except ClientError as e:
