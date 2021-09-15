@@ -2,7 +2,8 @@
     "queryStringParameters":
     {
         "_runtype": "full",
-        "verbose": "true",
-        "fromDateTime": "2021-08-23T20:08:09Z"
+        "_verbose": "true",
+        "fromDateTime": "2021-05-04T00:00:00Z",
+        "toDateTime": "2021-12-30T12:14:45Z"
     }
 }
