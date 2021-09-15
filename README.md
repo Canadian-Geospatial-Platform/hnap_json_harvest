@@ -102,7 +102,6 @@ Operation                      LogicalResourceId              ResourceType      
 + Add                          HnapJsonHarvestFunctionRole    AWS::IAM::Role                 N/A                          
 + Add                          HnapJsonHarvestFunction        AWS::Lambda::Function          N/A                          
 + Add                          ServerlessRestApiDeployment7   AWS::ApiGateway::Deployment    N/A                          
-                               22867cbc3                                                                                  
 + Add                          ServerlessRestApiProdStage     AWS::ApiGateway::Stage         N/A                          
 + Add                          ServerlessRestApi              AWS::ApiGateway::RestApi       N/A                          
 -------------------------------------------------------------------------------------------------------------------------
@@ -128,14 +127,14 @@ CREATE_IN_PROGRESS             AWS::ApiGateway::RestApi       ServerlessRestApi 
 CREATE_COMPLETE                AWS::ApiGateway::RestApi       ServerlessRestApi              -                            
 CREATE_IN_PROGRESS             AWS::Lambda::Permission        HnapJsonHarvestFunctionHnapJ   Resource creation Initiated  
                                                               sonHarvestPermissionProd                                    
-CREATE_IN_PROGRESS             AWS::ApiGateway::Deployment    ServerlessRestApiDeployment7   -                            
-                                                              22867cbc3                                                   
+CREATE_IN_PROGRESS             AWS::ApiGateway::Deployment    ServerlessRestApiDeployment   -                            
+                                                                                                                 
 CREATE_IN_PROGRESS             AWS::Lambda::Permission        HnapJsonHarvestFunctionHnapJ   -                            
                                                               sonHarvestPermissionProd                                    
-CREATE_IN_PROGRESS             AWS::ApiGateway::Deployment    ServerlessRestApiDeployment7   Resource creation Initiated  
-                                                              22867cbc3                                                   
-CREATE_COMPLETE                AWS::ApiGateway::Deployment    ServerlessRestApiDeployment7   -                            
-                                                              22867cbc3                                                   
+CREATE_IN_PROGRESS             AWS::ApiGateway::Deployment    ServerlessRestApiDeployment   Resource creation Initiated  
+                                                                                                                 
+CREATE_COMPLETE                AWS::ApiGateway::Deployment    ServerlessRestApiDeployment   -                            
+                                                                                                                 
 CREATE_IN_PROGRESS             AWS::ApiGateway::Stage         ServerlessRestApiProdStage     -                            
 CREATE_IN_PROGRESS             AWS::ApiGateway::Stage         ServerlessRestApiProdStage     Resource creation Initiated  
 CREATE_COMPLETE                AWS::ApiGateway::Stage         ServerlessRestApiProdStage     -                            
@@ -164,4 +163,36 @@ Value               **LAMBDA_ARN**
 
 ### Deleting the microservice
 
-aws cloudformation delete-stack --stack-name <<stack-name>>
+`aws cloudformation delete-stack --stack-name <<stack-name>>`
+    
+    
+### Converting AWS SAM template to CloudFormation template
+
+#Validate to ensure template.yaml is valid
+
+```
+sam validate
+```
+
+#install prereq
+
+```
+pip install aws-sam-translator docopt
+pip install pyyaml
+git clone https://github.com/aws/serverless-application-model.git
+pip install -r serverless-application-model/requirements/base.txt
+pip install cfn-flip
+```
+
+#convert SAM (yaml) to CF (json)
+
+```
+python serverless-application-model/bin/sam-translate.py --template-file=template.yaml --output-template=output.json
+```
+
+#convert CF (json) to CF (yaml)
+
+```
+cfn-flip -i json -o yaml output.json output.yaml
+```
+    
