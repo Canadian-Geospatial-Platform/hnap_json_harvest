@@ -169,18 +169,30 @@ Value               **LAMBDA_ARN**
 ### Converting AWS SAM template to CloudFormation template
 
 #Validate to ensure template.yaml is valid
-`sam validate`
+
+```
+sam validate
+```
 
 #install prereq
-`pip install aws-sam-translator docopt`
-`pip install pyyaml`
-`git clone https://github.com/aws/serverless-application-model.git`
-`pip install -r serverless-application-model/requirements/base.txt`
-`pip install cfn-flip`
+
+```
+pip install aws-sam-translator docopt
+pip install pyyaml
+git clone https://github.com/aws/serverless-application-model.git
+pip install -r serverless-application-model/requirements/base.txt
+pip install cfn-flip
+```
 
 #convert SAM (yaml) to CF (json)
-`python serverless-application-model/bin/sam-translate.py --template-file=template.yaml --output-template=output.json`
+
+```
+python serverless-application-model/bin/sam-translate.py --template-file=template.yaml --output-template=output.json
+```
 
 #convert CF (json) to CF (yaml)
-`cfn-flip -i json -o yaml output.json output.yaml`
+
+```
+cfn-flip -i json -o yaml output.json output.yaml
+```
     
