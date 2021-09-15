@@ -19,24 +19,24 @@ def lambda_handler(event, context):
     print(event)
     
     """PROD SETTINGS"""
-    #base_url = "https://maps.canada.ca"
-    #gn_q_query = "/srv/eng/q" #not used
-    #gn_change_api_url = "/geonetwork/srv/api/0.1/records/status/change"
-    #gn_json_record_url_start = "https://maps.canada.ca/geonetwork/srv/api/0.1/records/"
-    #gn_json_record_url_end = "/formatters/json?addSchemaLocation=true&attachment=false&withInfo=false" #other flags: increasePopularity
-    #bucket_location = "ca-central-1"
-    #bucket = "hnap-test-bucket"
-    #run_interval_minutes = 11
+    base_url = "https://maps.canada.ca"
+    gn_q_query = "/srv/eng/q" #not used
+    gn_change_api_url = "/geonetwork/srv/api/0.1/records/status/change"
+    gn_json_record_url_start = "https://maps.canada.ca/geonetwork/srv/api/0.1/records/"
+    gn_json_record_url_end = "/formatters/json?addSchemaLocation=true&attachment=false&withInfo=false" #other flags: increasePopularity
+    bucket_location = "ca-central-1"
+    bucket = "NA" #redacted
+    run_interval_minutes = 11
     
     """STAGING SETTINGS"""
-    base_url = "https://maps-staging.canada.ca"
-    gn_q_query = "/q_xml_small.xml" #not used
-    gn_change_api_url = "/geonetwork/srv/api/0.1/records/status/change"
-    gn_json_record_url_start = "https://maps-staging.canada.ca/geonetwork/srv/api/0.1/records/"
-    gn_json_record_url_end = "/formatters/json?addSchemaLocation=true&attachment=false&withInfo=false" #other flags: increasePopularity
-    bucket_location = None
-    bucket = "hnap-test-bucket2"
-    run_interval_minutes = 11
+    #base_url = "https://maps-staging.canada.ca"
+    #gn_q_query = "/q_xml_small.xml" #not used
+    #gn_change_api_url = "/geonetwork/srv/api/0.1/records/status/change"
+    #gn_json_record_url_start = "https://maps-staging.canada.ca/geonetwork/srv/api/0.1/records/"
+    #gn_json_record_url_end = "/formatters/json?addSchemaLocation=true&attachment=false&withInfo=false" #other flags: increasePopularity
+    #bucket_location = None
+    #bucket = "hnap-test-bucket2"
+    #run_interval_minutes = 11
     
     """ 
     Used for `sam local invoke -e payload.json` for local testing
@@ -68,6 +68,15 @@ def lambda_handler(event, context):
     except:
         fromDateTime = False
     
+    #toDateTime
+    try:
+        if datetime_valid(event["queryStringParameters"]["toDateTime"]):
+            toDateTime = event["queryStringParameters"]["toDateTime"]
+        else:
+            toDateTime = False
+    except:
+        toDateTime = False
+    
     """ 
     Construct the body of the response object 
     """
@@ -78,9 +87,13 @@ def lambda_handler(event, context):
         message = "Reloading all JSON records..."
         uuid_list = get_full_uuids_list(base_url + gn_q_query)
         err_msg = harvest_uuids(uuid_list, gn_json_record_url_start, gn_json_record_url_end, bucket, bucket_location)
-    elif fromDateTime:
-        message = "Reloading JSON records from: " + fromDateTime + "..."
-        uuid_list = get_fromDateTime_uuids_list(base_url + gn_change_api_url, fromDateTime)
+    elif fromDateTime and toDateTime:
+        message = "Reloading JSON records from: " + fromDateTime + " to" + toDateTime + "..."
+        uuid_list = get_fromtoDateTime_uuids_list(base_url + gn_change_api_url, fromDateTime, toDateTime)
+        err_msg = harvest_uuids(uuid_list, gn_json_record_url_start, gn_json_record_url_end, bucket, bucket_location)
+    elif toDateTime:
+        message = "Reloading JSON records to: " + toDateTime + "..."
+        uuid_list = get_toDateTime_uuids_list(base_url + gn_change_api_url, toDateTime)
         err_msg = harvest_uuids(uuid_list, gn_json_record_url_start, gn_json_record_url_end, bucket, bucket_location)
     else:
         fromDateTime = datetime.datetime.utcnow().now() - datetime.timedelta(minutes=run_interval_minutes)
@@ -181,6 +194,46 @@ def get_full_uuids_list(gn_q_query):
         print("Could not access: ", gn_q_query)
         return uuid_list
         
+def get_toDateTime_uuids_list(gn_change_query, toDateTime):
+    """ Get a list of insert/deleted/modified uuids from toDateTime
+    :param gn_change_query: URL of the GeoNetwork change api
+    :param toDateTime: datetime of when to harvest
+    :return: a list of uuids to harvest
+    """
+    
+    uuid_list = []
+    
+    try:
+        #Use the build in toDateTime functionality in the GN change API
+        gn_change_filter = "dateTo=" + toDateTime
+        gn_change_query = gn_change_query + "?" + gn_change_filter
+        print (gn_change_query)
+
+        headers = { 
+                "Content-Type": "application/json; charset=utf-8",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            }
+        response = requests.get(gn_change_query, headers=headers)
+        str_data = json.loads(response.text)
+
+        for metadata in str_data['records']:
+            lastdatetime = metadata['lastModifiedTime']
+            modification = metadata['status']
+            if convert_to_datetime(lastdatetime) <= convert_to_datetime(toDateTime) and modification != 'deleted':
+                #print(metadata['uuid'])
+                uuid = metadata['uuid']
+                uuid_list.append(uuid)
+            
+        print("Using the toDateTime provided: %s, there are: %i metadata records to harvest" % (toDateTime, len(uuid_list)))
+            
+        return uuid_list
+    except:
+        print("Could not load the GeoNetwork 3.6 change api.")
+        print("Cannot complete a load of the dataset")
+        print("Could not access or properly parse: ", gn_change_query)
+        error_msg = "Could not access or properly parse: " + gn_change_query
+        return error_msg
+        
 def get_fromDateTime_uuids_list(gn_change_query, fromDateTime):
     """ Get a list of insert/deleted/modified uuids from fromDateTime
     :param gn_change_query: URL of the GeoNetwork change api
@@ -230,6 +283,49 @@ def get_fromDateTime_uuids_list(gn_change_query, fromDateTime):
         print("Could not access or properly parse: ", gn_change_query)
         error_msg = "Could not access or properly parse: " + gn_change_query
         return error_msg
+        
+def get_fromtoDateTime_uuids_list(gn_change_query, fromDateTime, toDateTime):
+    """ Get a list of insert/deleted/modified uuids from fromDateTime to toDateTime
+    :param gn_change_query: URL of the GeoNetwork change api
+    :param fromDateTime: lower datetime of when to harvest
+    :param toDateTime: upper datetime of when to harvest
+    :return: a list of uuids to harvest
+    """
+    
+    uuid_list = []
+    
+    try:
+        #Use the build in toDateTime functionality in the GN change API
+        gn_change_filter = "dateFrom=" + fromDateTime + "&dateTo=" + toDateTime
+        gn_change_query = gn_change_query + "?" + gn_change_filter
+        print (gn_change_query)
+
+        headers = { 
+                "Content-Type": "application/json; charset=utf-8",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            }
+        response = requests.get(gn_change_query, headers=headers)
+        str_data = json.loads(response.text)
+
+        for metadata in str_data['records']:
+            lastdatetime = metadata['lastModifiedTime']
+            modification = metadata['status']
+            if (convert_to_datetime(lastdatetime) <= convert_to_datetime(toDateTime) and 
+                convert_to_datetime(lastdatetime) >= convert_to_datetime(fromDateTime) and 
+                modification != 'deleted'):
+                #print(metadata['uuid'])
+                uuid = metadata['uuid']
+                uuid_list.append(uuid)
+            
+        print("Using the toDateTime and fromDateTime provided, there are: %i metadata records to harvest" % (len(uuid_list)))
+            
+        return uuid_list
+    except:
+        print("Could not load the GeoNetwork 3.6 change api.")
+        print("Cannot complete a load of the dataset")
+        print("Could not access or properly parse: ", gn_change_query)
+        error_msg = "Could not access or properly parse: " + gn_change_query
+        return error_msg
     
 def create_bucket(bucket_name, region=None):
     """Create an S3 bucket in a specified region
@@ -243,28 +339,28 @@ def create_bucket(bucket_name, region=None):
     """
     
     
-    #client = boto3.client('s3', region_name=region)
-    #response = client.head_bucket(Bucket=bucket_name)
-    #if response['ResponseMetadata']['HTTPStatusCode'] == 200:
-    #    """ Bucket already exists and we have sufficent permissions """
-    #    print("Bucket already exists and we have sufficent permissions")
-    #    return True
-    #else:
-    """" Create bucket """
-    try:
-        if region is None:
-            s3_client = boto3.client('s3')
-            s3_client.create_bucket(Bucket=bucket_name)
-        else:
-            s3_client = boto3.client('s3', region_name=region)
-            location = {'LocationConstraint': region}
-            s3_client.create_bucket(Bucket=bucket_name,
-                                    CreateBucketConfiguration=location)
-
-    except ClientError as e:
-        logging.error(e)
-        return False
-    return True #Success
+    client = boto3.client('s3', region_name=region)
+    response = client.head_bucket(Bucket=bucket_name)
+    if response['ResponseMetadata']['HTTPStatusCode'] == 200:
+        """ Bucket already exists and we have sufficent permissions """
+        print("Bucket already exists and we have sufficent permissions")
+        return True
+    else:
+        """" Create bucket """
+        try:
+            if region is None:
+                s3_client = boto3.client('s3')
+                s3_client.create_bucket(Bucket=bucket_name)
+            else:
+                s3_client = boto3.client('s3', region_name=region)
+                location = {'LocationConstraint': region}
+                s3_client.create_bucket(Bucket=bucket_name,
+                                        CreateBucketConfiguration=location)
+    
+        except ClientError as e:
+            logging.error(e)
+            return False
+        return True #Success
 
 def upload_file(file_name, bucket, object_name=None):
     """Upload a file to an S3 bucket
@@ -329,7 +425,7 @@ def harvest_uuids(uuid_list, gn_json_record_url_start, gn_json_record_url_end, b
         for uuid in uuid_list:
             try:
                 req = urllib.request.Request(gn_json_record_url_start + uuid + gn_json_record_url_end)
-                req.add_header('Content-Type', 'application/json; charset=utf-8')
+                req.add_header('Accept', 'application/json; charset=utf-8')
                 str_data = urllib.request.urlopen(req).read()
                 
                 uuid_filename = uuid + ".json"
