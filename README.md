@@ -11,10 +11,20 @@ Use an AWS cron to run every `10` minutes and overwrite any existing JSON files 
 2) Special case: reload all JSON records
     `?runtype=full`
 
-3) Special case: load all records since a specific dateTime using ISO 8601
+3.1) Special case: load all records since a specific dateTime in ISO 8601
     `?fromDateTime=yyyy-MM-ddTHH:mm:ssZ`
 
     E.g., `?fromDateTime=2021-04-29T00:00:00Z`
+
+3.2) Special case: load all records up to a specific dateTime in ISO 8601
+    `?toDateTime=yyyy-MM-ddTHH:mm:ssZ`
+
+    E.g., `?toDateTime=2021-04-29T00:00:00Z`
+
+3.3) Special case: load all records between specific dateTimes in ISO 8601
+    `?fromDateTime=yyyy-MM-ddTHH:mm:ssZ&toDateTime=yyyy-MM-ddTHH:mm:ssZ`
+
+    E.g., `?fromDateTime=2021-04-29T00:00:00Z&toDateTime=2021-09-29T00:00:00Z`
 
 4) If GeoNetwork (https://maps.canada.ca/geonetwork) is inaccessible then exit.
 
@@ -30,6 +40,7 @@ In the AWS Cloud9 bash shell:
 
 ### Step 1 - Generate SSH Key for Github
 
+In the Cloud9 terminal:
 `ssh-keygen -t rsa`
 [Enter] [Enter] [Enter]
 `cat /home/ec2-user/.ssh/id_rsa.pub`
@@ -160,11 +171,17 @@ Description         HNAP JSON Harvesting Lambda Function ARN
 Value               **LAMBDA_ARN**                                                                                 
 ---------------------------------------------------------------------------------------------------------------------------
 ```
+### Updating the microservice
+
+`sam deploy`
+or
+`sam deploy --guided`
+
+Should return: `Successfully created/updated stack - APP_NAME in ca-central-1`
 
 ### Deleting the microservice
 
 `aws cloudformation delete-stack --stack-name <<stack-name>>`
-    
     
 ### Converting AWS SAM template to CloudFormation template
 
