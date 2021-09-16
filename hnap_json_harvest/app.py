@@ -402,7 +402,7 @@ def upload_json_file(file_name, bucket, json_data, object_name=None):
     s3 = boto3.resource('s3')
     try:
         s3object = s3.Object(bucket, file_name)
-        response = s3object.put(Body=(bytes(json.dumps(json_data.decode('utf-8')).encode('UTF-8'))))
+        response = s3object.put(Body=(bytes(json.dumps(json_data, indent=4, ensure_ascii=False).encode('utf-8'))))
     except ClientError as e:
         logging.error(e)
         return False
@@ -424,9 +424,20 @@ def harvest_uuids(uuid_list, gn_json_record_url_start, gn_json_record_url_end, b
         count = 0
         for uuid in uuid_list:
             try:
+                """urllib
                 req = urllib.request.Request(gn_json_record_url_start + uuid + gn_json_record_url_end)
                 req.add_header('Accept', 'application/json; charset=utf-8')
                 str_data = urllib.request.urlopen(req).read()
+                """
+                
+                #requests
+                headers = {
+                    "Content-Type": "text/html; charset=utf-8",
+                    "Accept": "application/json; charset=utf-8"
+                }
+                
+                response = requests.get(gn_json_record_url_start + uuid + gn_json_record_url_end, headers=headers)
+                str_data = json.loads(response.text)
                 
                 uuid_filename = uuid + ".json"
                 print(gn_json_record_url_start + uuid + gn_json_record_url_end)
