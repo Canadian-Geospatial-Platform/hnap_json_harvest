@@ -188,13 +188,20 @@ Should return: `Successfully created/updated stack - APP_NAME in ca-central-1`
     
 ### Converting AWS SAM template to CloudFormation template
 
-#Validate to ensure template.yaml is valid
+Validate to ensure template.yaml is valid
 
 ```
 sam validate
 ```
+If the validate returns an error is detected, it may be necessary to specify the URI of the container image. 
+In the template.yaml, add the ImageURI. E.g.,
+```
+Properties:
+    PackageType: Image
+          #ImageUri: XYZ.XYZ.XYZ.ca-central-1.amazonaws.com/CONTAINER-NAME
+```
 
-#install prereq
+Install prerequisites libraries
 
 ```
 pip install aws-sam-translator docopt
@@ -204,13 +211,13 @@ pip install -r serverless-application-model/requirements/base.txt
 pip install cfn-flip
 ```
 
-#convert SAM (yaml) to CF (json)
+First, convert the SAM template (yaml) to CF template (json). Note: there is currently no way to convert to yaml directly.
 
 ```
 python serverless-application-model/bin/sam-translate.py --template-file=template.yaml --output-template=output.json
 ```
 
-#convert CF (json) to CF (yaml)
+Next convert the CF template (json) to CF template (yaml). The output can be used to 
 
 ```
 cfn-flip -i json -o yaml output.json output.yaml
