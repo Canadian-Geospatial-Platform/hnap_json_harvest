@@ -30,12 +30,12 @@ def lambda_handler(event, context):
     
     """STAGING SETTINGS"""
     #base_url = "https://maps-staging.canada.ca"
-    #gn_q_query = "/q_xml_small.xml" #not used
+    #gn_q_query = "/srv/eng/q" #not used
     #gn_change_api_url = "/geonetwork/srv/api/0.1/records/status/change"
     #gn_json_record_url_start = "https://maps-staging.canada.ca/geonetwork/srv/api/0.1/records/"
     #gn_json_record_url_end = "/formatters/json?addSchemaLocation=true&attachment=false&withInfo=false" #other flags: increasePopularity
-    #bucket_location = None
-    #bucket = "hnap-test-bucket2"
+    #bucket_location = "ca-central-1"
+    #bucket = "NA" #redacted
     #run_interval_minutes = 11
     
     """ 
@@ -57,6 +57,11 @@ def lambda_handler(event, context):
         
     try:
         runtype = event["queryStringParameters"]["runtype"]
+        if runtype == "uuid":
+            try:
+                uuid = event["queryStringParameters"]["uuid"]
+            except:
+                uuid = False
     except:
         runtype = False
         
@@ -86,6 +91,10 @@ def lambda_handler(event, context):
     elif runtype == "full":
         message = "Reloading all JSON records..."
         uuid_list = get_full_uuids_list(base_url + gn_q_query)
+        err_msg = harvest_uuids(uuid_list, gn_json_record_url_start, gn_json_record_url_end, bucket, bucket_location)
+    elif runtype == "uuid" and uuid:
+        message = "Reloading a specific JSON records..."
+        uuid_list = [uuid]
         err_msg = harvest_uuids(uuid_list, gn_json_record_url_start, gn_json_record_url_end, bucket, bucket_location)
     elif fromDateTime and toDateTime:
         message = "Reloading JSON records from: " + fromDateTime + " to" + toDateTime + "..."

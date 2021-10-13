@@ -11,6 +11,9 @@ Use an AWS cron to run every `10` minutes and overwrite any existing JSON files 
 2) Special case: reload all JSON records
     `?runtype=full`
 
+2.1) Special case: reload a specific JSON record
+    `?runtype=uuid&uuid=$SOME_UUID`
+
 3.1) Special case: load all records since a specific dateTime in ISO 8601
     `?fromDateTime=yyyy-MM-ddTHH:mm:ssZ`
 
