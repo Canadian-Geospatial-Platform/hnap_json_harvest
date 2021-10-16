@@ -257,16 +257,7 @@ def get_fromDateTime_uuids_list(gn_change_query, fromDateTime):
         gn_change_filter = urllib.parse.quote("dateFrom=" + fromDateTime)
         gn_change_query = gn_change_query + "?" + gn_change_filter
         print (gn_change_query)
-
-        ###urllib
-        #req = urllib.request.Request(gn_change_query)
-        #req.add_header('User-Agent', 'Mozilla/5.0')
-        #req.add_header('Content-Type', 'application/json; charset=utf-8')
-        #raw_data = urllib.request.urlopen(req).read()
-    
-        #str_data = json.loads(raw_data)
-        #print (str_data['records'])
-    
+   
         ###requests
         headers = { 
                 "Content-Type": "application/json; charset=utf-8",
@@ -371,7 +362,7 @@ def create_bucket(bucket_name, region=None):
             return False
         return True #Success
 
-def upload_json_file(file_name, bucket, json_data, object_name=None):
+def upload_json_stream(file_name, bucket, json_data, object_name=None):
     """Upload a json file to an S3 bucket
 
     :param file_name: File to upload
@@ -428,7 +419,7 @@ def harvest_uuids(uuid_list, gn_json_record_url_start, gn_json_record_url_end, b
                 
                 uuid_filename = uuid + ".json"
                 print(gn_json_record_url_start + uuid + gn_json_record_url_end)
-                if upload_json_file(uuid_filename, bucket, str_data):
+                if upload_json_stream(uuid_filename, bucket, str_data):
                     count += 1
             except ClientError as e:
                 logging.error(e)
