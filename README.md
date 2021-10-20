@@ -65,7 +65,7 @@ cd HNAP_JSON_Harvest
 sam build
 ```
 
-Test the build using the `payload.json` file included in the hnap_json_harvest folder
+Test the build using the `payload.json` file included in the hnap_json_harvest folder. 
 
 ```bash
 sam local invoke -e payload.json
@@ -73,12 +73,12 @@ sam local invoke -e payload.json
 
 The response should appear similar to:
 ```bash
-{'queryStringParameters': {'runtype': 'full', '_fromDateTime': '2008-08-30T01:45:36.123Z'}}
+{'queryStringParameters': {'_runtype': 'full', 'fromDateTime': '2008-08-30T01:45:36.123Z'}}
 XML has: 5 metadata records
 Uploaded 5  records
 END RequestId: -ID-
 REPORT RequestId: -ID-  Init Duration: 1.02 ms  Duration: 2137.28 ms    Billed Duration: 2200 ms        Memory Size: 128 MB    Max Memory Used: 128 MB
-{"statusCode": "200", "headers": {"Content-type": "application/json"}, "body": "{\n    \"statusCode\": \"200\",\n    \"message\": \"Reloading all JSON records......5 record(s) harvested into hnap-test-bucket1\"\n}
+{"statusCode": "200", "headers": {"Content-type": "application/json"}, "body": "{\n    \"statusCode\": \"200\",\n    \"message\": \"Reloading all JSON records......5 record(s) harvested into SOME_BUCKET\"\n}
 ```
 
 ### Step 4 - Create an Amazon Elastic Container Registry
@@ -104,7 +104,7 @@ Confirm: y
 [Enter]
 [Enter]
 
-After this, sam will build the CloufFormation stack and deploy the ECR.
+After this, sam will build the CloudFormation stack and deploy the ECR.
 
 ```
 CloudFormation stack changeset
