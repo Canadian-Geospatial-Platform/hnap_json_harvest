@@ -12,6 +12,7 @@ import boto3.exceptions
 from botocore.exceptions import ClientError
 from xml.dom import minidom
 
+BUCKET_NAME = os.environ['BUCKET_NAME']
 def lambda_handler(event, context):
     """
     AWS Lambda Entry
@@ -20,31 +21,12 @@ def lambda_handler(event, context):
     
     """PROD SETTINGS"""
     base_url = "https://maps.canada.ca"
-    gn_q_query = "/srv/eng/q" #not used
     gn_change_api_url = "/geonetwork/srv/api/0.1/records/status/change"
     gn_json_record_url_start = "https://maps.canada.ca/geonetwork/srv/api/0.1/records/"
     gn_json_record_url_end = "/formatters/json?addSchemaLocation=true&attachment=false&withInfo=false" #other flags: increasePopularity
     bucket_location = "ca-central-1"
-    bucket = "NA" #redacted
+    bucket = BUCKET_NAME #redacted
     run_interval_minutes = 11
-    
-    """STAGING SETTINGS"""
-    #base_url = "https://maps-staging.canada.ca"
-    #gn_q_query = "/srv/eng/q" #not used
-    #gn_change_api_url = "/geonetwork/srv/api/0.1/records/status/change"
-    #gn_json_record_url_start = "https://maps-staging.canada.ca/geonetwork/srv/api/0.1/records/"
-    #gn_json_record_url_end = "/formatters/json?addSchemaLocation=true&attachment=false&withInfo=false" #other flags: increasePopularity
-    #bucket_location = "ca-central-1"
-    #bucket = "NA" #redacted
-    #run_interval_minutes = 11
-    
-    """ 
-    Used for `sam local invoke -e payload.json` for local testing
-    For actual use, comment out the two lines below 
-    """
-    
-    #if "body" in event:
-    #    event = json.loads(event["body"])
         
     """ 
     Parse query string parameters 
@@ -88,27 +70,25 @@ def lambda_handler(event, context):
     
     if runtype and fromDateTime:
         message = "Cannot use runtype and fromDateTime together"
-    elif runtype == "full":
-        message = "Reloading all JSON records..."
-        uuid_list = get_full_uuids_list(base_url + gn_q_query)
-        err_msg = harvest_uuids(uuid_list, gn_json_record_url_start, gn_json_record_url_end, bucket, bucket_location)
     elif runtype == "uuid" and uuid:
-        message = "Reloading a specific JSON records..."
-        uuid_list = [uuid]
-        err_msg = harvest_uuids(uuid_list, gn_json_record_url_start, gn_json_record_url_end, bucket, bucket_location)
+        message = "Reloading a list of JSON records..."
+        uuid_list = uuid
     elif fromDateTime and toDateTime:
         message = "Reloading JSON records from: " + fromDateTime + " to" + toDateTime + "..."
         uuid_list = get_fromtoDateTime_uuids_list(base_url + gn_change_api_url, fromDateTime, toDateTime)
-        err_msg = harvest_uuids(uuid_list, gn_json_record_url_start, gn_json_record_url_end, bucket, bucket_location)
+    elif fromDateTime:
+        message = "Reloading JSON records from: " + fromDateTime + "..."
+        uuid_list = get_fromDateTime_uuids_list(base_url + gn_change_api_url, fromDateTime)
     elif toDateTime:
         message = "Reloading JSON records to: " + toDateTime + "..."
         uuid_list = get_toDateTime_uuids_list(base_url + gn_change_api_url, toDateTime)
-        err_msg = harvest_uuids(uuid_list, gn_json_record_url_start, gn_json_record_url_end, bucket, bucket_location)
     else:
         fromDateTime = datetime.datetime.utcnow().now() - datetime.timedelta(minutes=run_interval_minutes)
         fromDateTime = fromDateTime.isoformat()[:-7] + 'Z'
         message = "Default setting. Harvesting JSON records from: " + fromDateTime + "..."
         uuid_list = get_fromDateTime_uuids_list(base_url + gn_change_api_url, fromDateTime)
+    
+    if len(uuid_list) > 0:
         err_msg = harvest_uuids(uuid_list, gn_json_record_url_start, gn_json_record_url_end, bucket, bucket_location)
         
     if not err_msg:
@@ -176,33 +156,6 @@ def convert_to_datetime(dt_str):
         return dt_str
     return dt_str
     
-def get_full_uuids_list(gn_q_query):
-    """ Get a full list of all uuids
-    :param gn_q_query: URL of the GeoNetwork 'q' search
-    See https://geonetwork-opensource.org/manuals/3.10.x/en/api/q-search.html
-    :return: a full list of uuids to harvest
-    """
-    
-    uuid_list = []
-    
-    try:
-        str_data = urllib.request.urlopen(gn_q_query).read()
-        xmldoc = minidom.parseString(str_data)
-        
-        metadatas = xmldoc.getElementsByTagName("metadata")
-        print("XML has: %i metadata records" % len(metadatas))
-        
-        for metadata in metadatas:
-            uuid = metadata.getElementsByTagName("uuid")[0]
-            uuid_list.append(uuid.firstChild.data)
-        
-        return uuid_list
-    except:
-        print("Could not load the GeoNetwork 3.6 'q' search.")
-        print("Cannot complete a full load of the dataset")
-        print("Could not access: ", gn_q_query)
-        return uuid_list
-        
 def get_toDateTime_uuids_list(gn_change_query, toDateTime):
     """ Get a list of insert/deleted/modified uuids from toDateTime
     :param gn_change_query: URL of the GeoNetwork change api
@@ -216,7 +169,7 @@ def get_toDateTime_uuids_list(gn_change_query, toDateTime):
         #Use the build in toDateTime functionality in the GN change API
         gn_change_filter = "dateTo=" + toDateTime
         gn_change_query = gn_change_query + "?" + gn_change_filter
-        print (gn_change_query)
+        #print (gn_change_query)
 
         headers = { 
                 "Content-Type": "application/json; charset=utf-8",
@@ -298,7 +251,7 @@ def get_fromtoDateTime_uuids_list(gn_change_query, fromDateTime, toDateTime):
         #Use the build in toDateTime functionality in the GN change API
         gn_change_filter = "dateFrom=" + fromDateTime + "&dateTo=" + toDateTime
         gn_change_query = gn_change_query + "?" + gn_change_filter
-        print (gn_change_query)
+        #print (gn_change_query)
 
         headers = { 
                 "Content-Type": "application/json; charset=utf-8",
@@ -418,7 +371,7 @@ def harvest_uuids(uuid_list, gn_json_record_url_start, gn_json_record_url_end, b
                 str_data = json.loads(response.text)
                 
                 uuid_filename = uuid + ".json"
-                print(gn_json_record_url_start + uuid + gn_json_record_url_end)
+                #print(gn_json_record_url_start + uuid + gn_json_record_url_end)
                 if upload_json_stream(uuid_filename, bucket, str_data):
                     count += 1
             except ClientError as e:
@@ -429,3 +382,32 @@ def harvest_uuids(uuid_list, gn_json_record_url_start, gn_json_record_url_end, b
         error_msg = "Could not create S3 bucket: " + bucket
 
     return error_msg
+    
+    
+""" def get_full_uuids_list(gn_q_query):
+    #NOTE: function cannot finish in 15 minutes
+    # Get a full list of all uuids
+    #:param gn_q_query: URL of the GeoNetwork 'q' search
+    #See https://geonetwork-opensource.org/manuals/3.10.x/en/api/q-search.html
+    #:return: a full list of uuids to harvest
+    
+    uuid_list = []
+    
+    try:
+        str_data = urllib.request.urlopen(gn_q_query).read()
+        xmldoc = minidom.parseString(str_data)
+        
+        metadatas = xmldoc.getElementsByTagName("metadata")
+        print("XML has: %i metadata records" % len(metadatas))
+        
+        for metadata in metadatas:
+            uuid = metadata.getElementsByTagName("uuid")[0]
+            uuid_list.append(uuid.firstChild.data)
+        
+        return uuid_list
+    except:
+        print("Could not load the GeoNetwork 3.6 'q' search.")
+        print("Cannot complete a full load of the dataset")
+        print("Could not access: ", gn_q_query)
+        return uuid_list
+"""
