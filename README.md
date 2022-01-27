@@ -65,7 +65,21 @@ cd HNAP_JSON_Harvest
 sam build
 ```
 
-Test the build using the `payload.json` file included in the hnap_json_harvest folder. 
+Test the build using the `payload.json` file included in the 'events' folder. 
+
+Hint: remove the underscore '_' to get desired behaviour
+```json
+{
+    "queryStringParameters":
+    {
+        "_runtype": "full",
+        "_verbose": "true",
+	"_uuid": 8b882aa3-f8ef-4d88-8541-059260e04e4a,
+        "_fromDateTime": "2021-05-04T00:00:00Z",
+        "_toDateTime": "2021-12-30T12:14:45Z"
+    }
+}
+```
 
 ```bash
 sam local invoke -e payload.json
