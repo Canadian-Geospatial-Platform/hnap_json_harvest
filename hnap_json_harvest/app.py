@@ -72,7 +72,7 @@ def lambda_handler(event, context):
         message = "Cannot use runtype and fromDateTime together"
     elif runtype == "uuid" and uuid:
         message = "Reloading a list of JSON records..."
-        uuid_list = uuid
+        uuid_list = [uuid]
     elif fromDateTime and toDateTime:
         message = "Reloading JSON records from: " + fromDateTime + " to" + toDateTime + "..."
         uuid_list = get_fromtoDateTime_uuids_list(base_url + gn_change_api_url, fromDateTime, toDateTime)
