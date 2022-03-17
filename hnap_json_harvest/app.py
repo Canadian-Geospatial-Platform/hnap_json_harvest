@@ -13,21 +13,27 @@ from botocore.exceptions import ClientError
 from xml.dom import minidom
 
 BUCKET_NAME = os.environ['BUCKET_NAME']
+BASE_URL = os.environ['BASE_URL']
+GN_JSON_RECORD_URL_START = os.environ['GN_JSON_RECORD_URL_START']
+RUN_INTERVAL_MINUTES = os.environ['RUN_INTERVAL_MINUTES']
+
 def lambda_handler(event, context):
     """
     AWS Lambda Entry
     """
-    print(event)
+    #print(event)
     
-    """PROD SETTINGS"""
-    base_url = "https://maps.canada.ca"
-    gn_change_api_url = "/geonetwork/srv/api/0.1/records/status/change"
-    gn_json_record_url_start = "https://maps.canada.ca/geonetwork/srv/api/0.1/records/"
+    """PROD SETTINGS"""    
+    #base_url = "https://maps.canada.ca"
+    #gn_json_record_url_start = "https://maps.canada.ca/geonetwork/srv/api/0.1/records/"
+    
+    base_url = BASE_URL
+    gn_change_api_url = "/geonetwork/srv/api/0.1/records/status/change"    
+    gn_json_record_url_start = GN_JSON_RECORD_URL_START
     gn_json_record_url_end = "/formatters/json?addSchemaLocation=true&attachment=false&withInfo=false" #other flags: increasePopularity
     bucket_location = "ca-central-1"
     bucket = BUCKET_NAME #redacted
-    run_interval_minutes = 11
-        
+    run_interval_minutes = RUN_INTERVAL_MINUTES            
     """ 
     Parse query string parameters 
     """
@@ -63,6 +69,10 @@ def lambda_handler(event, context):
             toDateTime = False
     except:
         toDateTime = False
+        
+    #run_interval_minutes
+    if run_interval_minutes == None or run_interval_minutes == "":
+        run_interval_minutes = 11
     
     """ 
     Construct the body of the response object 
