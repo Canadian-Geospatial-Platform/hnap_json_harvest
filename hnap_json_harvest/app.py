@@ -33,7 +33,15 @@ def lambda_handler(event, context):
     gn_json_record_url_end = "/formatters/json?addSchemaLocation=true&attachment=false&withInfo=false" #other flags: increasePopularity
     bucket_location = "ca-central-1"
     bucket = BUCKET_NAME #redacted
-    run_interval_minutes = RUN_INTERVAL_MINUTES            
+    err_msg = None
+	
+    try:
+        run_interval_minutes = int(RUN_INTERVAL_MINUTES)
+        if run_interval_minutes == None or run_interval_minutes == "":
+            run_interval_minutes = 11
+    except:
+	    run_interval_minutes = 11
+
     """ 
     Parse query string parameters 
     """
@@ -70,9 +78,7 @@ def lambda_handler(event, context):
     except:
         toDateTime = False
         
-    #run_interval_minutes
-    if run_interval_minutes == None or run_interval_minutes == "":
-        run_interval_minutes = 11
+
     
     """ 
     Construct the body of the response object 
