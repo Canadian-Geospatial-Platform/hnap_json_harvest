@@ -85,13 +85,13 @@ def lambda_handler(event, context):
         uuid_list = [uuid]
     elif fromDateTime and toDateTime:
         message = "Reloading JSON records from: " + fromDateTime + " to" + toDateTime + "..."
-        uuid_list = get_fromtoDateTime_uuids_list(base_url + gn_change_api_url, fromDateTime, toDateTime)
+        uuid_list,uuid_deleted_list = get_fromtoDateTime_uuids_list(base_url + gn_change_api_url, fromDateTime, toDateTime)
     elif fromDateTime:
         message = "Reloading JSON records from: " + fromDateTime + "..."
-        uuid_list = get_fromDateTime_uuids_list(base_url + gn_change_api_url, fromDateTime)
+        uuid_list,uuid_deleted_list = get_fromDateTime_uuids_list(base_url + gn_change_api_url, fromDateTime)
     elif toDateTime:
         message = "Reloading JSON records to: " + toDateTime + "..."
-        uuid_list = get_toDateTime_uuids_list(base_url + gn_change_api_url, toDateTime)
+        uuid_list, uuid_deleted_list = get_toDateTime_uuids_list(base_url + gn_change_api_url, toDateTime)
     else:
         fromDateTime = datetime.datetime.utcnow().now() - datetime.timedelta(minutes=run_interval_minutes)
         fromDateTime = fromDateTime.isoformat()[:-7] + 'Z'
@@ -100,9 +100,13 @@ def lambda_handler(event, context):
     
     if len(uuid_list) > 0:
         err_msg = harvest_uuids(uuid_list, gn_json_record_url_start, gn_json_record_url_end, bucket, bucket_location)
+    
+    if len(uuid_deleted_list) > 0:
+        err_msg_2 = delete_uuids(uuid_deleted_list, bucket)
         
-    if not err_msg:
+    if not err_msg and not err_msg_2:
         message += "..." + str(len(uuid_list)) + " record(s) harvested into " + bucket
+        message += "..." + str(len(uuid_deleted_list)) + " record(s) deleted from " + bucket
         if verbose == "true" and len(uuid_list) >0:
             message += '"uuid": ['
             for i in range(len(uuid_list)):
@@ -174,6 +178,7 @@ def get_toDateTime_uuids_list(gn_change_query, toDateTime):
     """
     
     uuid_list = []
+    uuid_deleted_list=[]
     
     try:
         #Use the build in toDateTime functionality in the GN change API
@@ -195,10 +200,14 @@ def get_toDateTime_uuids_list(gn_change_query, toDateTime):
                 #print(metadata['uuid'])
                 uuid = metadata['uuid']
                 uuid_list.append(uuid)
+                
+            elif convert_to_datetime(lastdatetime) <= convert_to_datetime(toDateTime) and modification == 'deleted':
+                uuid = metadata['uuid']
+                uuid_deleted_list.append(uuid)
             
         print("Using the toDateTime provided: %s, there are: %i metadata records to harvest" % (toDateTime, len(uuid_list)))
-            
-        return uuid_list
+        print("Using the toDateTime provided: %s, there are: %i metadata records are deleted " % (toDateTime, len(uuid_deleted_list)))    
+        return uuid_list, uuid_deleted_list
     except:
         print("Could not load the GeoNetwork 3.6 change api.")
         print("Cannot complete a load of the dataset")
@@ -214,6 +223,7 @@ def get_fromDateTime_uuids_list(gn_change_query, fromDateTime):
     """
     
     uuid_list = []
+    uuid_deleted_list = []
     
     try:
         #Use the build in fromDateTime functionality in the GN change API
@@ -236,10 +246,14 @@ def get_fromDateTime_uuids_list(gn_change_query, fromDateTime):
                 #print(metadata['uuid'])
                 uuid = metadata['uuid']
                 uuid_list.append(uuid)
+            elif convert_to_datetime(lastdatetime) >= convert_to_datetime(fromDateTime) and modification == 'deleted':
+                uuid = metadata['uuid']
+                uuid_deleted_list.append(uuid)
             
         print("Using the fromDateTime provided: %s, there are: %i metadata records to harvest" % (fromDateTime, len(uuid_list)))
-            
-        return uuid_list
+        print("Using the fromDateTime provided: %s, there are: %i metadata records are deleted" % (fromDateTime, len(uuid_deleted_list)))
+        
+        return uuid_list, uuid_deleted_list
     except:
         print("Could not load the GeoNetwork 3.6 change api.")
         print("Cannot complete a load of the dataset")
@@ -256,6 +270,7 @@ def get_fromtoDateTime_uuids_list(gn_change_query, fromDateTime, toDateTime):
     """
     
     uuid_list = []
+    uuid_deleted_list = []
     
     try:
         #Use the build in toDateTime functionality in the GN change API
@@ -279,10 +294,15 @@ def get_fromtoDateTime_uuids_list(gn_change_query, fromDateTime, toDateTime):
                 #print(metadata['uuid'])
                 uuid = metadata['uuid']
                 uuid_list.append(uuid)
+            elif (convert_to_datetime(lastdatetime) <= convert_to_datetime(toDateTime) and 
+                convert_to_datetime(lastdatetime) >= convert_to_datetime(fromDateTime) and 
+                modification == 'deleted'): 
+                uuid = metadata['uuid']
+                uuid_deleted_list.append(uuid)
             
         print("Using the toDateTime and fromDateTime provided, there are: %i metadata records to harvest" % (len(uuid_list)))
-            
-        return uuid_list
+        print("Using the toDateTime and fromDateTime provided, there are: %i metadata records are deleted" % (len(uuid_deleted_list)))
+        return uuid_list, uuid_deleted_list
     except:
         print("Could not load the GeoNetwork 3.6 change api.")
         print("Cannot complete a load of the dataset")
@@ -421,3 +441,43 @@ def harvest_uuids(uuid_list, gn_json_record_url_start, gn_json_record_url_end, b
         print("Could not access: ", gn_q_query)
         return uuid_list
 """
+
+def delete_uuids(uuid_deleted_list, bucket):
+    """ Delete the json files in uuid_deleted_list from a s3 bucket
+    Return a message to the user: delete xx uuid from xx bucket 
+
+    :parm uuid_deleted_list: a list of uuid needs to be deleted 
+    :parm bucket:bucket to delete from 
+
+    """
+    error_msg = None 
+    count = 0 
+    for uuid in uuid_deleted_list:    
+        try: 
+            uuid_filename = uuid + ".json"
+            if delete_json_streams(uuid_filename, bucket):
+                count += 1
+        except ClientError as e: 
+            logging.error(e)
+            error_msg += e
+    print('Deleted', count, " records")
+        
+    return error_msg
+
+def delete_json_streams(filename, bucket): 
+    """Delete a json file to an S3 bucket
+
+    :param file_name: File to upload
+    :param bucket: Bucket to upload to
+    :return: True if file was deleted, else False
+    """
+
+    s3 = boto3.resource('s3')
+    try: 
+        s3object = s3.Object(bucket, filename)
+        response = s3object.delete()
+    except ClientError as e: 
+        logging.error(e)
+        return False
+    return True 
+
