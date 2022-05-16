@@ -12,10 +12,11 @@ import boto3.exceptions
 from botocore.exceptions import ClientError
 from xml.dom import minidom
 
-BUCKET_NAME = os.environ['BUCKET_NAME']
-BASE_URL = os.environ['BASE_URL']
-GN_JSON_RECORD_URL_START = os.environ['GN_JSON_RECORD_URL_START']
-RUN_INTERVAL_MINUTES = os.environ['RUN_INTERVAL_MINUTES']
+JSON_BUCKET_NAME = "webpresence-geocore-hnap-json-dev"
+GEOJSON_BUCKET_NAME = "webpresence-geocore-json-to-geojson-dev"
+BASE_URL = "https://maps.canada.ca"
+GN_JSON_RECORD_URL_START = "https://maps.canada.ca/geonetwork/srv/api/0.1/records/"
+RUN_INTERVAL_MINUTES = "11"
 
 def lambda_handler(event, context):
     """
@@ -32,16 +33,12 @@ def lambda_handler(event, context):
     gn_json_record_url_start = GN_JSON_RECORD_URL_START
     gn_json_record_url_end = "/formatters/json?addSchemaLocation=true&attachment=false&withInfo=false" #other flags: increasePopularity
     bucket_location = "ca-central-1"
-    bucket = BUCKET_NAME #redacted
+    bucket = JSON_BUCKET_NAME #redacted
+    geojson_bucket = GEOJSON_BUCKET_NAME
+    run_interval_minutes = RUN_INTERVAL_MINUTES      
     err_msg = None
-	
-    try:
-        run_interval_minutes = int(RUN_INTERVAL_MINUTES)
-        if run_interval_minutes == None or run_interval_minutes == "":
-            run_interval_minutes = 11
-    except:
-	    run_interval_minutes = 11
-
+    err_msg_2 = None
+    
     """ 
     Parse query string parameters 
     """
@@ -78,7 +75,9 @@ def lambda_handler(event, context):
     except:
         toDateTime = False
         
-
+    #run_interval_minutes
+    if run_interval_minutes == None or run_interval_minutes == "":
+        run_interval_minutes = 11
     
     """ 
     Construct the body of the response object 
@@ -108,11 +107,11 @@ def lambda_handler(event, context):
         err_msg = harvest_uuids(uuid_list, gn_json_record_url_start, gn_json_record_url_end, bucket, bucket_location)
     
     if len(uuid_deleted_list) > 0:
-        err_msg_2 = delete_uuids(uuid_deleted_list, bucket)
+        err_msg_2 = delete_uuids(uuid_deleted_list, geojson_bucket)
         
     if not err_msg and not err_msg_2:
         message += "..." + str(len(uuid_list)) + " record(s) harvested into " + bucket
-        message += "..." + str(len(uuid_deleted_list)) + " record(s) deleted from " + bucket
+        message += "..." + str(len(uuid_deleted_list)) + " record(s) deleted from " + geojson_bucket
         if verbose == "true" and len(uuid_list) >0:
             message += '"uuid": ['
             for i in range(len(uuid_list)):
@@ -460,7 +459,7 @@ def delete_uuids(uuid_deleted_list, bucket):
     count = 0 
     for uuid in uuid_deleted_list:    
         try: 
-            uuid_filename = uuid + ".json"
+            uuid_filename = uuid + ".geojson"
             if delete_json_streams(uuid_filename, bucket):
                 count += 1
         except ClientError as e: 
@@ -482,6 +481,9 @@ def delete_json_streams(filename, bucket):
     try: 
         s3object = s3.Object(bucket, filename)
         response = s3object.delete()
+        print("Response: ", response)
+        print("Deleted filenames: ", filename)
+        print("Deleted bucket: " , bucket)
     except ClientError as e: 
         logging.error(e)
         return False
