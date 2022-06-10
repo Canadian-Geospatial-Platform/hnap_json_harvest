@@ -12,11 +12,11 @@ import boto3.exceptions
 from botocore.exceptions import ClientError
 from xml.dom import minidom
 
-JSON_BUCKET_NAME = "webpresence-geocore-hnap-json-dev"
-GEOJSON_BUCKET_NAME = "webpresence-geocore-json-to-geojson-dev"
-BASE_URL = "https://maps.canada.ca"
-GN_JSON_RECORD_URL_START = "https://maps.canada.ca/geonetwork/srv/api/0.1/records/"
-RUN_INTERVAL_MINUTES = "11"
+JSON_BUCKET_NAME = os.environ['BUCKET_NAME']
+GEOJSON_BUCKET_NAME = os.environ['GEOJSON_BUCKET_NAME']
+BASE_URL = os.environ['BASE_URL']
+GN_JSON_RECORD_URL_START = os.environ['GN_JSON_RECORD_URL_START']
+RUN_INTERVAL_MINUTES = os.environ['RUN_INTERVAL_MINUTES']
 
 def lambda_handler(event, context):
     """
@@ -38,6 +38,8 @@ def lambda_handler(event, context):
     run_interval_minutes = RUN_INTERVAL_MINUTES      
     err_msg = None
     err_msg_2 = None
+    uuid_list = []
+    uuid_deleted_list = []
     
     """ 
     Parse query string parameters 
@@ -50,7 +52,12 @@ def lambda_handler(event, context):
         
     try:
         runtype = event["queryStringParameters"]["runtype"]
-        if runtype == "uuid":
+        if runtype == "insert_uuid":
+            try:
+                uuid = event["queryStringParameters"]["uuid"]
+            except:
+                uuid = False
+        elif runtype == "delete_uuid":
             try:
                 uuid = event["queryStringParameters"]["uuid"]
             except:
@@ -85,9 +92,12 @@ def lambda_handler(event, context):
     
     if runtype and fromDateTime:
         message = "Cannot use runtype and fromDateTime together"
-    elif runtype == "uuid" and uuid:
-        message = "Reloading a list of JSON records..."
+    elif runtype == "insert_uuid" and uuid:
+        message = "Inserting a list of JSON records..."
         uuid_list = [uuid]
+    elif runtype == "delete_uuid" and uuid:
+        message = "Deleting a list of JSON records..."
+        uuid_deleted_list = [uuid]
     elif fromDateTime and toDateTime:
         message = "Reloading JSON records from: " + fromDateTime + " to" + toDateTime + "..."
         uuid_list,uuid_deleted_list = get_fromtoDateTime_uuids_list(base_url + gn_change_api_url, fromDateTime, toDateTime)
@@ -488,4 +498,3 @@ def delete_json_streams(filename, bucket):
         logging.error(e)
         return False
     return True 
-
