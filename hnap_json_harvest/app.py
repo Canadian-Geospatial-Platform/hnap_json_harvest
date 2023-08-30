@@ -2,7 +2,6 @@ import os
 import json
 import requests
 import boto3
-import smart_open
 import urllib.request
 import xml.dom.minidom
 import logging
@@ -35,7 +34,7 @@ def lambda_handler(event, context):
     bucket_location = "ca-central-1"
     bucket = JSON_BUCKET_NAME #redacted
     geojson_bucket = GEOJSON_BUCKET_NAME
-    run_interval_minutes = RUN_INTERVAL_MINUTES      
+    run_interval_minutes = int(RUN_INTERVAL_MINUTES)
     err_msg = None
     err_msg_2 = None
     uuid_list = []
@@ -111,8 +110,8 @@ def lambda_handler(event, context):
         fromDateTime = datetime.datetime.utcnow().now() - datetime.timedelta(minutes=run_interval_minutes)
         fromDateTime = fromDateTime.isoformat()[:-7] + 'Z'
         message = "Default setting. Harvesting JSON records from: " + fromDateTime + "..."
-        uuid_list = get_fromDateTime_uuids_list(base_url + gn_change_api_url, fromDateTime)
-    
+        uuid_list, uuid_deleted_list = get_fromDateTime_uuids_list(base_url + gn_change_api_url, fromDateTime)
+
     if len(uuid_list) > 0:
         err_msg = harvest_uuids(uuid_list, gn_json_record_url_start, gn_json_record_url_end, bucket, bucket_location)
     
@@ -267,7 +266,7 @@ def get_fromDateTime_uuids_list(gn_change_query, fromDateTime):
             
         print("Using the fromDateTime provided: %s, there are: %i metadata records to harvest" % (fromDateTime, len(uuid_list)))
         print("Using the fromDateTime provided: %s, there are: %i metadata records are deleted" % (fromDateTime, len(uuid_deleted_list)))
-        
+
         return uuid_list, uuid_deleted_list
     except:
         print("Could not load the GeoNetwork 3.6 change api.")
