@@ -2,6 +2,7 @@ import os
 import json
 import requests
 import boto3
+#import smart_open
 import urllib.request
 import xml.dom.minidom
 import logging
@@ -13,6 +14,7 @@ from xml.dom import minidom
 
 JSON_BUCKET_NAME = os.environ['BUCKET_NAME']
 GEOJSON_BUCKET_NAME = os.environ['GEOJSON_BUCKET_NAME']
+geojson_bucket_name, folder_path = (GEOJSON_BUCKET_NAME.split("/", 1) + [None])[:2]
 BASE_URL = os.environ['BASE_URL']
 GN_JSON_RECORD_URL_START = os.environ['GN_JSON_RECORD_URL_START']
 RUN_INTERVAL_MINUTES = os.environ['RUN_INTERVAL_MINUTES']
@@ -33,7 +35,10 @@ def lambda_handler(event, context):
     gn_json_record_url_end = "/formatters/json?addSchemaLocation=true&attachment=false&withInfo=false" #other flags: increasePopularity
     bucket_location = "ca-central-1"
     bucket = JSON_BUCKET_NAME #redacted
-    geojson_bucket = GEOJSON_BUCKET_NAME
+    bucket, bucket_folder_path = (bucket.split("/", 1) + [None])[:2]
+    print(bucket, " ", bucket_folder_path)
+    geojson_bucket_name = GEOJSON_BUCKET_NAME
+    geojson_bucket_name, folder_path = (geojson_bucket_name.split("/", 1) + [None])[:2]
     run_interval_minutes = int(RUN_INTERVAL_MINUTES)
     err_msg = None
     err_msg_2 = None
@@ -113,14 +118,14 @@ def lambda_handler(event, context):
         uuid_list, uuid_deleted_list = get_fromDateTime_uuids_list(base_url + gn_change_api_url, fromDateTime)
 
     if len(uuid_list) > 0:
-        err_msg = harvest_uuids(uuid_list, gn_json_record_url_start, gn_json_record_url_end, bucket, bucket_location)
+        err_msg = harvest_uuids(uuid_list, gn_json_record_url_start, gn_json_record_url_end, bucket, bucket_location, bucket_folder_path=bucket_folder_path)
     
     if len(uuid_deleted_list) > 0:
-        err_msg_2 = delete_uuids(uuid_deleted_list, geojson_bucket)
+        err_msg_2 = delete_uuids(uuid_deleted_list, geojson_bucket_name, folder_path=bucket_folder_path)
         
     if not err_msg and not err_msg_2:
         message += "..." + str(len(uuid_list)) + " record(s) harvested into " + bucket
-        message += "..." + str(len(uuid_deleted_list)) + " record(s) deleted from " + geojson_bucket
+        message += "..." + str(len(uuid_deleted_list)) + " record(s) deleted from " + geojson_bucket_name
         if verbose == "true" and len(uuid_list) >0:
             message += '"uuid": ['
             for i in range(len(uuid_list)):
@@ -359,31 +364,37 @@ def create_bucket(bucket_name, region=None):
             return False
         return True #Success
 
-def upload_json_stream(file_name, bucket, json_data, object_name=None):
-    """Upload a json file to an S3 bucket
+def upload_json_stream(file_name, bucket, json_data, folder_path=None, object_name=None):
+    """Upload a JSON file to an S3 bucket inside a folder if specified.
 
     :param file_name: File to upload
     :param bucket: Bucket to upload to
-    :param json_data: stream of json data to write
-    :param object_name: S3 object name. If not specified then file_name is used
+    :param json_data: Stream of JSON data to write
+    :param folder_path: Folder inside the bucket to upload to
+    :param object_name: S3 object name. If not specified, file_name is used
     :return: True if file was uploaded, else False
     """
+    # Include folder path if specified
+    if folder_path:
+        file_name = f"{folder_path}/{file_name}"
 
     # If S3 object_name was not specified, use file_name
     if object_name is None:
         object_name = file_name
 
+    print(object_name)
+
     # Upload the file
     s3 = boto3.resource('s3')
     try:
-        s3object = s3.Object(bucket, file_name)
-        response = s3object.put(Body=(bytes(json.dumps(json_data, indent=4, ensure_ascii=False).encode('utf-8'))))
+        s3object = s3.Object(bucket, object_name)
+        s3object.put(Body=(bytes(json.dumps(json_data, indent=4, ensure_ascii=False).encode('utf-8'))))
     except ClientError as e:
         logging.error(e)
         return False
     return True
 
-def harvest_uuids(uuid_list, gn_json_record_url_start, gn_json_record_url_end, bucket, bucket_location):
+def harvest_uuids(uuid_list, gn_json_record_url_start, gn_json_record_url_end, bucket, bucket_location, bucket_folder_path=None):
     """ Harvests GeoNetwork JSON file into s3_bucket_name
     
     :param uuid_list: list of uuids to upload
@@ -416,7 +427,8 @@ def harvest_uuids(uuid_list, gn_json_record_url_start, gn_json_record_url_end, b
                 
                 uuid_filename = uuid + ".json"
                 #print(gn_json_record_url_start + uuid + gn_json_record_url_end)
-                if upload_json_stream(uuid_filename, bucket, str_data):
+                print(bucket)
+                if upload_json_stream(uuid_filename, bucket, str_data, folder_path=bucket_folder_path):
                     count += 1
             except ClientError as e:
                 logging.error(e)
@@ -456,7 +468,7 @@ def harvest_uuids(uuid_list, gn_json_record_url_start, gn_json_record_url_end, b
         return uuid_list
 """
 
-def delete_uuids(uuid_deleted_list, bucket):
+def delete_uuids(uuid_deleted_list, bucket, folder_path=None):
     """ Delete the json files in uuid_deleted_list from a s3 bucket
     Return a message to the user: delete xx uuid from xx bucket 
 
@@ -469,7 +481,7 @@ def delete_uuids(uuid_deleted_list, bucket):
     for uuid in uuid_deleted_list:    
         try: 
             uuid_filename = uuid + ".geojson"
-            if delete_json_streams(uuid_filename, bucket):
+            if delete_json_streams(uuid_filename, geojson_bucket_name, folder_path=folder_path):
                 count += 1
         except ClientError as e: 
             logging.error(e)
@@ -478,22 +490,27 @@ def delete_uuids(uuid_deleted_list, bucket):
         
     return error_msg
 
-def delete_json_streams(filename, bucket): 
-    """Delete a json file to an S3 bucket
+def delete_json_streams(filename, bucket, folder_path=None):
+    """Delete a JSON file from an S3 bucket inside a folder if specified.
 
-    :param file_name: File to upload
-    :param bucket: Bucket to upload to
+    :param filename: File to delete
+    :param bucket: Bucket to delete from
+    :param folder_path: Folder inside the bucket where the file resides
     :return: True if file was deleted, else False
     """
+    # Include folder path if specified
+    if folder_path:
+        filename = f"{folder_path}/{filename}"
+    
+    print("filename:" , filename)
+    print("bucket:", bucket)
 
     s3 = boto3.resource('s3')
-    try: 
+    try:
         s3object = s3.Object(bucket, filename)
-        response = s3object.delete()
-        print("Response: ", response)
-        print("Deleted filenames: ", filename)
-        print("Deleted bucket: " , bucket)
-    except ClientError as e: 
+        s3object.delete()
+        print(f"Deleted {filename} from {bucket}")
+    except ClientError as e:
         logging.error(e)
         return False
-    return True 
+    return True
